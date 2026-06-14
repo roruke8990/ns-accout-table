@@ -3,217 +3,148 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>네이버시리즈 계정 관리</title>
+  <title>네이버시리즈 계정 관리자</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
       <div>
-        <h1>네이버시리즈 계정 관리</h1>
-        <p class="subtitle">PC 전용 · 로컬 스토리지 저장 · JSON 백업/복원 지원</p>
+        <h1>네이버시리즈 계정 관리자</h1>
+        <p>PC 전용 · 테이블 중심 관리 · 로컬 저장</p>
       </div>
       <div class="topbar-actions">
         <button id="addAccountBtn" class="btn btn-primary">계정 추가</button>
-        <button id="exportBtn" class="btn">JSON 백업</button>
-        <button id="importBtn" class="btn">JSON 불러오기</button>
+        <button id="backupBtn" class="btn">JSON 백업</button>
+        <button id="restoreBtn" class="btn">JSON 불러오기</button>
         <button id="resetBtn" class="btn btn-danger">전체 초기화</button>
-        <input id="importFileInput" type="file" accept="application/json" hidden />
+        <input id="restoreInput" type="file" accept="application/json" hidden />
       </div>
     </header>
 
-    <section class="summary-grid" id="summaryGrid">
-      <article class="summary-card">
-        <span class="summary-label">계정 수</span>
-        <strong id="summaryAccountCount">0</strong>
-      </article>
-      <article class="summary-card">
-        <span class="summary-label">작품 수</span>
-        <strong id="summaryWorkCount">0</strong>
-      </article>
-      <article class="summary-card">
-        <span class="summary-label">총 보유 쿠키</span>
-        <strong id="summaryTotalCookies">0</strong>
-      </article>
-      <article class="summary-card">
-        <span class="summary-label">오늘~모레 만료합</span>
-        <strong id="summaryExpireSoon">0</strong>
-      </article>
+    <section class="summary-grid">
+      <div class="summary-card">
+        <div class="summary-label">계정 수</div>
+        <div id="summaryAccounts" class="summary-value">0</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">총 보유 쿠키</div>
+        <div id="summaryCookies" class="summary-value">0</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">오늘~모레 만료 합</div>
+        <div id="summaryExpireSoon" class="summary-value">0</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">작품 수</div>
+        <div id="summaryWorks" class="summary-value">0</div>
+      </div>
     </section>
 
-    <main class="main-grid">
-      <section class="panel">
-        <div class="panel-header">
-          <div>
-            <h2>계정 목록</h2>
-            <p>요약 카드 + 접이식 상세 패널 형태로 한 화면에 보기 쉽게 구성했습니다.</p>
-          </div>
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <h2>계정 관리</h2>
+          <p>행 단위 직접 입력 · 상세 구매 목록은 펼침</p>
         </div>
-        <div id="accountsContainer" class="accounts-grid"></div>
-      </section>
+      </div>
 
-      <section class="panel">
-        <div class="panel-header">
-          <div>
-            <h2>작품 등록 / 수정</h2>
-            <p>작품명, 가격, 할인 종료일, 비고를 관리합니다.</p>
-          </div>
+      <div class="table-scroll">
+        <table class="data-table account-table">
+          <thead>
+            <tr>
+              <th class="w-40">계정명</th>
+              <th class="w-48">아이디/이메일</th>
+              <th class="w-12">총보유</th>
+              <th class="w-12">오늘만료</th>
+              <th class="w-12">내일만료</th>
+              <th class="w-12">모레만료</th>
+              <th class="w-12">만료합</th>
+              <th class="w-12">오늘구매</th>
+              <th class="w-14">구매후잔량</th>
+              <th>비고</th>
+              <th class="w-18">상세/삭제</th>
+            </tr>
+          </thead>
+          <tbody id="accountTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header works-header">
+        <div>
+          <h2>작품 리스트</h2>
+          <p>추가/수정/삭제 · 작품명 자동완성 소스</p>
         </div>
-
-        <form id="workForm" class="form-grid">
-          <input type="hidden" id="workId" />
-          <label>
-            <span>작품명</span>
-            <input id="workTitle" type="text" maxlength="100" placeholder="작품명을 입력하세요" required />
-          </label>
-          <label>
-            <span>작품가격</span>
-            <input id="workPrice" type="number" min="0" step="1" placeholder="0" required />
-          </label>
-          <label class="checkbox-row">
-            <input id="workDiscounted" type="checkbox" />
-            <span>할인 중</span>
-          </label>
-          <label>
-            <span>할인 종료일</span>
-            <input id="workDiscountEndDate" type="date" />
-          </label>
-          <label class="full-width">
-            <span>비고</span>
-            <textarea id="workNote" rows="3" maxlength="300" placeholder="비고를 입력하세요"></textarea>
-          </label>
-          <div class="form-actions full-width">
-            <button type="submit" class="btn btn-primary">저장</button>
-            <button type="button" id="cancelWorkEditBtn" class="btn">입력 초기화</button>
-          </div>
-        </form>
-
-        <div class="panel-header compact">
-          <div>
-            <h2>작품 목록</h2>
-            <p>표는 스크롤 가능하며 작품명/가격 기준 정렬을 지원합니다.</p>
-          </div>
-          <div class="toolbar">
-            <input id="workSearchInput" class="search-input" type="text" placeholder="작품 검색" />
-            <button id="sortByTitleBtn" class="btn btn-small">작품명 정렬</button>
-            <button id="sortByPriceBtn" class="btn btn-small">가격 정렬</button>
-          </div>
+        <div class="inline-tools">
+          <input id="workSearchInput" class="search-input" type="text" placeholder="작품 검색" />
+          <button id="sortTitleBtn" class="btn btn-small">작품명 정렬</button>
+          <button id="sortPriceBtn" class="btn btn-small">가격 정렬</button>
         </div>
+      </div>
 
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>작품명</th>
-                <th>가격</th>
-                <th>할인</th>
-                <th>할인 종료일</th>
-                <th>비고</th>
-                <th>관리</th>
-              </tr>
-            </thead>
-            <tbody id="worksTableBody"></tbody>
-          </table>
+      <form id="workForm" class="work-form">
+        <input type="hidden" id="workId" />
+        <div class="form-cell title">
+          <label for="workTitle">작품명</label>
+          <input id="workTitle" type="text" required />
         </div>
-      </section>
-    </main>
+        <div class="form-cell price">
+          <label for="workPrice">쿠키가격</label>
+          <input id="workPrice" type="number" min="0" step="1" value="0" required />
+        </div>
+        <div class="form-cell discount-check">
+          <label for="workDiscount">할인</label>
+          <input id="workDiscount" type="checkbox" />
+        </div>
+        <div class="form-cell date">
+          <label for="workDiscountEnd">할인종료일</label>
+          <input id="workDiscountEnd" type="date" />
+        </div>
+        <div class="form-cell note">
+          <label for="workNote">비고</label>
+          <input id="workNote" type="text" />
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" type="submit">저장</button>
+          <button id="cancelWorkEditBtn" class="btn" type="button">취소</button>
+        </div>
+      </form>
+
+      <div class="table-scroll works-scroll">
+        <table class="data-table work-table">
+          <thead>
+            <tr>
+              <th class="w-40">작품명</th>
+              <th class="w-12">가격</th>
+              <th class="w-10">할인</th>
+              <th class="w-20">할인종료일</th>
+              <th>비고</th>
+              <th class="w-18">수정/삭제</th>
+            </tr>
+          </thead>
+          <tbody id="workTableBody"></tbody>
+        </table>
+      </div>
+    </section>
   </div>
 
-  <template id="accountCardTemplate">
-    <article class="account-card">
-      <div class="account-card-header">
-        <div class="account-card-title">
-          <h3 class="account-name"></h3>
-          <p class="account-email muted"></p>
-        </div>
-        <div class="account-card-actions">
-          <button type="button" class="btn btn-small toggle-detail-btn">상세보기</button>
-          <button type="button" class="btn btn-small btn-danger delete-account-btn">삭제</button>
-        </div>
-      </div>
-
-      <div class="account-summary-row">
-        <div class="mini-stat">
-          <span>보유 쿠키</span>
-          <strong class="cookie-total"></strong>
-        </div>
-        <div class="mini-stat">
-          <span>오늘~모레 만료합</span>
-          <strong class="expire-total"></strong>
-        </div>
-        <div class="mini-stat">
-          <span>오늘 구매 예정</span>
-          <strong class="planned-total"></strong>
-        </div>
-        <div class="mini-stat">
-          <span>구매 후 잔여</span>
-          <strong class="remaining-total"></strong>
-        </div>
-      </div>
-
-      <div class="account-detail hidden">
-        <div class="form-grid">
-          <label>
-            <span>계정명</span>
-            <input class="account-name-input" type="text" maxlength="60" placeholder="예: 메인 계정" />
-          </label>
-          <label>
-            <span>이메일/식별자</span>
-            <input class="account-email-input" type="text" maxlength="100" placeholder="선택 입력" />
-          </label>
-          <label>
-            <span>총 보유량</span>
-            <input class="account-cookie-total-input" type="number" min="0" step="1" />
-          </label>
-          <label>
-            <span>오늘 만료</span>
-            <input class="account-expire-today-input" type="number" min="0" step="1" />
-          </label>
-          <label>
-            <span>내일 만료</span>
-            <input class="account-expire-tomorrow-input" type="number" min="0" step="1" />
-          </label>
-          <label>
-            <span>모레 만료</span>
-            <input class="account-expire-day-after-input" type="number" min="0" step="1" />
-          </label>
-          <label class="full-width">
-            <span>비고</span>
-            <textarea class="account-note-input" rows="2" maxlength="300" placeholder="메모를 입력하세요"></textarea>
-          </label>
-        </div>
-
-        <div class="subpanel">
-          <div class="subpanel-header">
-            <div>
-              <h4>오늘 구매 작품</h4>
-              <p>작품 리스트의 항목을 선택하면 가격이 자동 반영됩니다.</p>
-            </div>
-            <button type="button" class="btn btn-small add-purchase-btn">구매 항목 추가</button>
-          </div>
-
-          <div class="table-wrap narrow">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>작품 선택</th>
-                  <th>작품명 보정</th>
-                  <th>쿠키</th>
-                  <th>삭제</th>
-                </tr>
-              </thead>
-              <tbody class="purchase-table-body"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="meta-row">
-          <span>생성: <span class="created-at"></span></span>
-          <span>수정: <span class="updated-at"></span></span>
-        </div>
-      </div>
-    </article>
+  <template id="purchaseRowTemplate">
+    <tr class="purchase-row">
+      <td>
+        <input class="purchase-title-input" type="text" list="workListData" placeholder="작품명 검색 또는 입력" />
+      </td>
+      <td>
+        <input class="purchase-cost-input" type="number" min="0" step="1" value="0" />
+      </td>
+      <td class="purchase-actions-cell">
+        <button type="button" class="btn btn-small btn-delete-purchase">삭제</button>
+      </td>
+    </tr>
   </template>
+
+  <datalist id="workListData"></datalist>
 
   <script src="app.js"></script>
 </body>

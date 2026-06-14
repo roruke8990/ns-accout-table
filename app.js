@@ -1,41 +1,16 @@
-const STORAGE_KEY = "naver-series-manager-v1";
+const STORAGE_KEY = "naver-series-manager-table-v2";
 
 const state = {
-  sort: { key: "title", direction: "asc" },
-  searchTerm: "",
-  data: loadState(),
+  accounts: [],
+  works: [],
+  workSort: { key: "title", direction: "asc" },
+  workSearch: ""
 };
 
-const elements = {
-  accountsContainer: document.getElementById("accountsContainer"),
-  worksTableBody: document.getElementById("worksTableBody"),
-  addAccountBtn: document.getElementById("addAccountBtn"),
-  exportBtn: document.getElementById("exportBtn"),
-  importBtn: document.getElementById("importBtn"),
-  resetBtn: document.getElementById("resetBtn"),
-  importFileInput: document.getElementById("importFileInput"),
-  summaryAccountCount: document.getElementById("summaryAccountCount"),
-  summaryWorkCount: document.getElementById("summaryWorkCount"),
-  summaryTotalCookies: document.getElementById("summaryTotalCookies"),
-  summaryExpireSoon: document.getElementById("summaryExpireSoon"),
-  workForm: document.getElementById("workForm"),
-  workId: document.getElementById("workId"),
-  workTitle: document.getElementById("workTitle"),
-  workPrice: document.getElementById("workPrice"),
-  workDiscounted: document.getElementById("workDiscounted"),
-  workDiscountEndDate: document.getElementById("workDiscountEndDate"),
-  workNote: document.getElementById("workNote"),
-  cancelWorkEditBtn: document.getElementById("cancelWorkEditBtn"),
-  workSearchInput: document.getElementById("workSearchInput"),
-  sortByTitleBtn: document.getElementById("sortByTitleBtn"),
-  sortByPriceBtn: document.getElementById("sortByPriceBtn"),
-  accountCardTemplate: document.getElementById("accountCardTemplate"),
-};
+const els = {};
 
-function createId() {
-  if (window.crypto && typeof window.crypto.randomUUID === "function") {
-    return window.crypto.randomUUID();
-  }
+function uid() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
@@ -43,467 +18,625 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function toSafeNumber(value) {
+function toNonNegativeInt(value) {
   const num = Number(value);
   if (!Number.isFinite(num) || num < 0) return 0;
   return Math.floor(num);
 }
 
-function formatDateTime(iso) {
-  if (!iso) return "-";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "-";
-  return new Intl.DateTimeFormat("ko-KR", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
-}
-
-function formatDateOnly(value) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("ko-KR", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
-}
-
-function createEmptyWork() {
+function createAccount() {
   return {
-    id: createId(),
+    id: uid(),
+    name: "",
+    loginId: "",
+    cookieTotal: 0,
+    expireToday: 0,
+    expireTomorrow: 0,
+    expireDayAfterTomorrow: 0,
+    note: "",
+    expanded: false,
+    purchases: [],
+    createdAt: nowIso(),
+    updatedAt: nowIso()
+  };
+}
+
+function createWork() {
+  return {
+    id: uid(),
     title: "",
     price: 0,
     isDiscounted: false,
     discountEndDate: "",
     note: "",
     createdAt: nowIso(),
-    updatedAt: nowIso(),
+    updatedAt: nowIso()
   };
 }
 
-function createEmptyAccount() {
+function createPurchase() {
   return {
-    id: createId(),
-    name: "",
-    email: "",
-    note: "",
-    cookieTotal: 0,
-    expireToday: 0,
-    expireTomorrow: 0,
-    expireDayAfterTomorrow: 0,
-    purchases: [],
-    expanded: true,
-    createdAt: nowIso(),
-    updatedAt: nowIso(),
-  };
-}
-
-function createEmptyPurchase() {
-  return {
-    id: createId(),
+    id: uid(),
     workId: "",
-    titleSnapshot: "",
-    cookieCost: 0,
-  };
-}
-
-function defaultStateData() {
-  return {
-    accounts: [],
-    works: [],
-  };
-}
-
-function normalizePurchase(raw) {
-  return {
-    id: typeof raw?.id === "string" ? raw.id : createId(),
-    workId: typeof raw?.workId === "string" ? raw.workId : "",
-    titleSnapshot: typeof raw?.titleSnapshot === "string" ? raw.titleSnapshot : "",
-    cookieCost: toSafeNumber(raw?.cookieCost ?? 0),
-  };
-}
-
-function normalizeAccount(raw) {
-  return {
-    id: typeof raw?.id === "string" ? raw.id : createId(),
-    name: typeof raw?.name === "string" ? raw.name : "",
-    email: typeof raw?.email === "string" ? raw.email : "",
-    note: typeof raw?.note === "string" ? raw.note : "",
-    cookieTotal: toSafeNumber(raw?.cookieTotal ?? 0),
-    expireToday: toSafeNumber(raw?.expireToday ?? 0),
-    expireTomorrow: toSafeNumber(raw?.expireTomorrow ?? 0),
-    expireDayAfterTomorrow: toSafeNumber(raw?.expireDayAfterTomorrow ?? 0),
-    purchases: Array.isArray(raw?.purchases) ? raw.purchases.map(normalizePurchase) : [],
-    expanded: Boolean(raw?.expanded),
-    createdAt: typeof raw?.createdAt === "string" ? raw.createdAt : nowIso(),
-    updatedAt: typeof raw?.updatedAt === "string" ? raw.updatedAt : nowIso(),
-  };
-}
-
-function normalizeWork(raw) {
-  return {
-    id: typeof raw?.id === "string" ? raw.id : createId(),
-    title: typeof raw?.title === "string" ? raw.title : "",
-    price: toSafeNumber(raw?.price ?? 0),
-    isDiscounted: Boolean(raw?.isDiscounted),
-    discountEndDate: typeof raw?.discountEndDate === "string" ? raw.discountEndDate : "",
-    note: typeof raw?.note === "string" ? raw.note : "",
-    createdAt: typeof raw?.createdAt === "string" ? raw.createdAt : nowIso(),
-    updatedAt: typeof raw?.updatedAt === "string" ? raw.updatedAt : nowIso(),
+    title: "",
+    cookieCost: 0
   };
 }
 
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return defaultStateData();
-    const parsed = JSON.parse(raw);
-    return {
-      accounts: Array.isArray(parsed?.accounts) ? parsed.accounts.map(normalizeAccount) : [],
-      works: Array.isArray(parsed?.works) ? parsed.works.map(normalizeWork) : [],
-    };
-  } catch {
-    return defaultStateData();
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    state.accounts = Array.isArray(saved.accounts) ? saved.accounts.map(normalizeAccount) : [];
+    state.works = Array.isArray(saved.works) ? saved.works.map(normalizeWork) : [];
+    if (saved.workSort && (saved.workSort.key === "title" || saved.workSort.key === "price")) {
+      state.workSort.key = saved.workSort.key;
+      state.workSort.direction = saved.workSort.direction === "desc" ? "desc" : "asc";
+    }
+  } catch (error) {
+    console.error("저장 데이터 로드 실패", error);
   }
 }
 
-function persist() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data));
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    accounts: state.accounts,
+    works: state.works,
+    workSort: state.workSort
+  }));
 }
 
-function updateAndRender() {
-  persist();
-  render();
-}
-
-function findWorkById(workId) {
-  return state.data.works.find((work) => work.id === workId) || null;
-}
-
-function getSortedWorks() {
-  const works = [...state.data.works];
-  works.sort((a, b) => {
-    const factor = state.sort.direction === "asc" ? 1 : -1;
-    if (state.sort.key === "price") {
-      if (a.price !== b.price) return (a.price - b.price) * factor;
-      return a.title.localeCompare(b.title, "ko") * factor;
-    }
-    const titleDiff = a.title.localeCompare(b.title, "ko");
-    if (titleDiff !== 0) return titleDiff * factor;
-    return (a.price - b.price) * factor;
-  });
-  return works;
-}
-
-function getFilteredWorks() {
-  const keyword = state.searchTerm.trim().toLowerCase();
-  const works = getSortedWorks();
-  if (!keyword) return works;
-  return works.filter((work) => {
-    return [work.title, work.note, String(work.price)].some((field) =>
-      field.toLowerCase().includes(keyword)
-    );
-  });
-}
-
-function getAccountStats(account) {
-  const expireSoon =
-    account.expireToday + account.expireTomorrow + account.expireDayAfterTomorrow;
-  const plannedCookies = account.purchases.reduce((sum, item) => sum + item.cookieCost, 0);
+function normalizeAccount(item) {
   return {
-    expireSoon,
-    plannedCookies,
-    remainingAfterPurchase: account.cookieTotal - plannedCookies,
+    id: item.id || uid(),
+    name: typeof item.name === "string" ? item.name : "",
+    loginId: typeof item.loginId === "string" ? item.loginId : "",
+    cookieTotal: toNonNegativeInt(item.cookieTotal),
+    expireToday: toNonNegativeInt(item.expireToday),
+    expireTomorrow: toNonNegativeInt(item.expireTomorrow),
+    expireDayAfterTomorrow: toNonNegativeInt(item.expireDayAfterTomorrow),
+    note: typeof item.note === "string" ? item.note : "",
+    expanded: Boolean(item.expanded),
+    purchases: Array.isArray(item.purchases) ? item.purchases.map(normalizePurchase) : [],
+    createdAt: typeof item.createdAt === "string" ? item.createdAt : nowIso(),
+    updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : nowIso()
   };
 }
 
-function setWorkForm(work) {
-  elements.workId.value = work?.id || "";
-  elements.workTitle.value = work?.title || "";
-  elements.workPrice.value = String(work?.price ?? 0);
-  elements.workDiscounted.checked = Boolean(work?.isDiscounted);
-  elements.workDiscountEndDate.value = work?.discountEndDate || "";
-  elements.workNote.value = work?.note || "";
+function normalizeWork(item) {
+  return {
+    id: item.id || uid(),
+    title: typeof item.title === "string" ? item.title : "",
+    price: toNonNegativeInt(item.price),
+    isDiscounted: Boolean(item.isDiscounted),
+    discountEndDate: typeof item.discountEndDate === "string" ? item.discountEndDate : "",
+    note: typeof item.note === "string" ? item.note : "",
+    createdAt: typeof item.createdAt === "string" ? item.createdAt : nowIso(),
+    updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : nowIso()
+  };
 }
 
-function resetWorkForm() {
-  setWorkForm(createEmptyWork());
-  elements.workId.value = "";
+function normalizePurchase(item) {
+  return {
+    id: item.id || uid(),
+    workId: typeof item.workId === "string" ? item.workId : "",
+    title: typeof item.title === "string" ? item.title : "",
+    cookieCost: toNonNegativeInt(item.cookieCost)
+  };
 }
 
-function renderSummary() {
-  const accounts = state.data.accounts;
-  const works = state.data.works;
-  const totalCookies = accounts.reduce((sum, account) => sum + account.cookieTotal, 0);
-  const expireSoon = accounts.reduce((sum, account) => {
-    return sum + account.expireToday + account.expireTomorrow + account.expireDayAfterTomorrow;
-  }, 0);
-
-  elements.summaryAccountCount.textContent = String(accounts.length);
-  elements.summaryWorkCount.textContent = String(works.length);
-  elements.summaryTotalCookies.textContent = String(totalCookies);
-  elements.summaryExpireSoon.textContent = String(expireSoon);
+function initElements() {
+  els.accountTableBody = document.getElementById("accountTableBody");
+  els.workTableBody = document.getElementById("workTableBody");
+  els.addAccountBtn = document.getElementById("addAccountBtn");
+  els.backupBtn = document.getElementById("backupBtn");
+  els.restoreBtn = document.getElementById("restoreBtn");
+  els.restoreInput = document.getElementById("restoreInput");
+  els.resetBtn = document.getElementById("resetBtn");
+  els.summaryAccounts = document.getElementById("summaryAccounts");
+  els.summaryCookies = document.getElementById("summaryCookies");
+  els.summaryExpireSoon = document.getElementById("summaryExpireSoon");
+  els.summaryWorks = document.getElementById("summaryWorks");
+  els.workForm = document.getElementById("workForm");
+  els.workId = document.getElementById("workId");
+  els.workTitle = document.getElementById("workTitle");
+  els.workPrice = document.getElementById("workPrice");
+  els.workDiscount = document.getElementById("workDiscount");
+  els.workDiscountEnd = document.getElementById("workDiscountEnd");
+  els.workNote = document.getElementById("workNote");
+  els.cancelWorkEditBtn = document.getElementById("cancelWorkEditBtn");
+  els.sortTitleBtn = document.getElementById("sortTitleBtn");
+  els.sortPriceBtn = document.getElementById("sortPriceBtn");
+  els.workSearchInput = document.getElementById("workSearchInput");
+  els.workListData = document.getElementById("workListData");
+  els.purchaseRowTemplate = document.getElementById("purchaseRowTemplate");
 }
 
-function renderAccounts() {
-  const container = elements.accountsContainer;
-  container.innerHTML = "";
+function bindEvents() {
+  els.addAccountBtn.addEventListener("click", () => {
+    state.accounts.push(createAccount());
+    commit();
+  });
 
-  if (state.data.accounts.length === 0) {
-    container.innerHTML = '<div class="empty-state">등록된 계정이 없습니다. 상단의 "계정 추가" 버튼으로 시작하세요.</div>';
-    return;
-  }
+  els.backupBtn.addEventListener("click", backupJson);
 
-  state.data.accounts.forEach((account) => {
-    const fragment = elements.accountCardTemplate.content.cloneNode(true);
-    const card = fragment.querySelector(".account-card");
-    const detail = fragment.querySelector(".account-detail");
-    const toggleButton = fragment.querySelector(".toggle-detail-btn");
-    const stats = getAccountStats(account);
+  els.restoreBtn.addEventListener("click", () => els.restoreInput.click());
 
-    fragment.querySelector(".account-name").textContent = account.name || "이름 없는 계정";
-    fragment.querySelector(".account-email").textContent = account.email || "식별자 미입력";
-    fragment.querySelector(".cookie-total").textContent = String(account.cookieTotal);
-    fragment.querySelector(".expire-total").textContent = String(stats.expireSoon);
-    fragment.querySelector(".planned-total").textContent = String(stats.plannedCookies);
-
-    const remainingEl = fragment.querySelector(".remaining-total");
-    remainingEl.textContent = String(stats.remainingAfterPurchase);
-    remainingEl.classList.toggle("status-negative", stats.remainingAfterPurchase < 0);
-    remainingEl.classList.toggle("status-positive", stats.remainingAfterPurchase >= 0);
-
-    fragment.querySelector(".created-at").textContent = formatDateTime(account.createdAt);
-    fragment.querySelector(".updated-at").textContent = formatDateTime(account.updatedAt);
-
-    if (account.expanded) {
-      detail.classList.remove("hidden");
-      toggleButton.textContent = "요약보기";
-    } else {
-      detail.classList.add("hidden");
-      toggleButton.textContent = "상세보기";
+  els.restoreInput.addEventListener("change", async (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      state.accounts = Array.isArray(data.accounts) ? data.accounts.map(normalizeAccount) : [];
+      state.works = Array.isArray(data.works) ? data.works.map(normalizeWork) : [];
+      if (data.workSort && (data.workSort.key === "title" || data.workSort.key === "price")) {
+        state.workSort = {
+          key: data.workSort.key,
+          direction: data.workSort.direction === "desc" ? "desc" : "asc"
+        };
+      }
+      commit();
+      alert("불러오기를 완료했습니다.");
+    } catch (error) {
+      console.error(error);
+      alert("JSON 파일을 불러오지 못했습니다.");
+    } finally {
+      event.target.value = "";
     }
+  });
 
-    const nameInput = fragment.querySelector(".account-name-input");
-    const emailInput = fragment.querySelector(".account-email-input");
-    const cookieTotalInput = fragment.querySelector(".account-cookie-total-input");
-    const expireTodayInput = fragment.querySelector(".account-expire-today-input");
-    const expireTomorrowInput = fragment.querySelector(".account-expire-tomorrow-input");
-    const expireDayAfterInput = fragment.querySelector(".account-expire-day-after-input");
-    const noteInput = fragment.querySelector(".account-note-input");
+  els.resetBtn.addEventListener("click", () => {
+    if (!confirm("모든 계정/작품 데이터를 초기화할까요?")) return;
+    state.accounts = [];
+    state.works = [];
+    state.workSort = { key: "title", direction: "asc" };
+    state.workSearch = "";
+    resetWorkForm();
+    commit();
+  });
 
-    nameInput.value = account.name;
-    emailInput.value = account.email;
-    cookieTotalInput.value = String(account.cookieTotal);
-    expireTodayInput.value = String(account.expireToday);
-    expireTomorrowInput.value = String(account.expireTomorrow);
-    expireDayAfterInput.value = String(account.expireDayAfterTomorrow);
-    noteInput.value = account.note;
+  els.workForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveWorkForm();
+  });
 
-    nameInput.addEventListener("input", (event) => updateAccount(account.id, "name", event.target.value));
-    emailInput.addEventListener("input", (event) => updateAccount(account.id, "email", event.target.value));
-    cookieTotalInput.addEventListener("input", (event) => updateAccount(account.id, "cookieTotal", toSafeNumber(event.target.value)));
-    expireTodayInput.addEventListener("input", (event) => updateAccount(account.id, "expireToday", toSafeNumber(event.target.value)));
-    expireTomorrowInput.addEventListener("input", (event) => updateAccount(account.id, "expireTomorrow", toSafeNumber(event.target.value)));
-    expireDayAfterInput.addEventListener("input", (event) => updateAccount(account.id, "expireDayAfterTomorrow", toSafeNumber(event.target.value)));
-    noteInput.addEventListener("input", (event) => updateAccount(account.id, "note", event.target.value));
+  els.cancelWorkEditBtn.addEventListener("click", resetWorkForm);
 
-    toggleButton.addEventListener("click", () => {
-      account.expanded = !account.expanded;
-      account.updatedAt = nowIso();
-      updateAndRender();
-    });
+  els.sortTitleBtn.addEventListener("click", () => toggleWorkSort("title"));
+  els.sortPriceBtn.addEventListener("click", () => toggleWorkSort("price"));
 
-    fragment.querySelector(".delete-account-btn").addEventListener("click", () => {
-      if (!window.confirm("이 계정을 삭제할까요?")) return;
-      state.data.accounts = state.data.accounts.filter((item) => item.id !== account.id);
-      updateAndRender();
-    });
-
-    fragment.querySelector(".add-purchase-btn").addEventListener("click", () => {
-      account.purchases.push(createEmptyPurchase());
-      account.updatedAt = nowIso();
-      updateAndRender();
-    });
-
-    renderPurchases(fragment.querySelector(".purchase-table-body"), account);
-
-    container.appendChild(fragment);
+  els.workSearchInput.addEventListener("input", (event) => {
+    state.workSearch = event.target.value.trim().toLowerCase();
+    renderWorks();
   });
 }
 
-function renderPurchases(tbody, account) {
-  tbody.innerHTML = "";
-
-  if (account.purchases.length === 0) {
-    const row = document.createElement("tr");
-    row.innerHTML = '<td colspan="4" class="muted">등록된 구매 항목이 없습니다.</td>';
-    tbody.appendChild(row);
-    return;
-  }
-
-  const worksForSelect = [...state.data.works].sort((a, b) => a.title.localeCompare(b.title, "ko"));
-
-  account.purchases.forEach((purchase) => {
-    const row = document.createElement("tr");
-
-    const workSelectCell = document.createElement("td");
-    const workSelect = document.createElement("select");
-    workSelect.className = "purchase-select";
-    workSelect.innerHTML = '<option value="">작품 선택</option>';
-    worksForSelect.forEach((work) => {
-      const option = document.createElement("option");
-      option.value = work.id;
-      option.textContent = `${work.title} (${work.price})`;
-      if (purchase.workId === work.id) option.selected = true;
-      workSelect.appendChild(option);
-    });
-    workSelect.addEventListener("change", (event) => {
-      const selectedWorkId = event.target.value;
-      const selectedWork = findWorkById(selectedWorkId);
-      purchase.workId = selectedWorkId;
-      purchase.titleSnapshot = selectedWork ? selectedWork.title : "";
-      purchase.cookieCost = selectedWork ? selectedWork.price : purchase.cookieCost;
-      account.updatedAt = nowIso();
-      updateAndRender();
-    });
-    workSelectCell.appendChild(workSelect);
-
-    const titleCell = document.createElement("td");
-    const titleInput = document.createElement("input");
-    titleInput.type = "text";
-    titleInput.className = "inline-input";
-    titleInput.value = purchase.titleSnapshot;
-    titleInput.placeholder = "작품명 보정";
-    titleInput.addEventListener("input", (event) => {
-      purchase.titleSnapshot = event.target.value;
-      account.updatedAt = nowIso();
-      persist();
-      renderSummary();
-      renderAccounts();
-    });
-    titleCell.appendChild(titleInput);
-
-    const cookieCell = document.createElement("td");
-    const cookieInput = document.createElement("input");
-    cookieInput.type = "number";
-    cookieInput.min = "0";
-    cookieInput.step = "1";
-    cookieInput.className = "inline-input small";
-    cookieInput.value = String(purchase.cookieCost);
-    cookieInput.addEventListener("input", (event) => {
-      purchase.cookieCost = toSafeNumber(event.target.value);
-      account.updatedAt = nowIso();
-      persist();
-      renderSummary();
-      renderAccounts();
-    });
-    cookieCell.appendChild(cookieInput);
-
-    const actionCell = document.createElement("td");
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.className = "btn btn-small btn-danger";
-    deleteBtn.textContent = "삭제";
-    deleteBtn.addEventListener("click", () => {
-      account.purchases = account.purchases.filter((item) => item.id !== purchase.id);
-      account.updatedAt = nowIso();
-      updateAndRender();
-    });
-    actionCell.appendChild(deleteBtn);
-
-    row.appendChild(workSelectCell);
-    row.appendChild(titleCell);
-    row.appendChild(cookieCell);
-    row.appendChild(actionCell);
-    tbody.appendChild(row);
-  });
+function commit() {
+  saveState();
+  renderAll();
 }
 
-function renderWorks() {
-  const tbody = elements.worksTableBody;
-  tbody.innerHTML = "";
-
-  const works = getFilteredWorks();
-  if (works.length === 0) {
-    const row = document.createElement("tr");
-    row.innerHTML = '<td colspan="6" class="muted">등록된 작품이 없습니다.</td>';
-    tbody.appendChild(row);
-    return;
-  }
-
-  works.forEach((work) => {
-    const row = document.createElement("tr");
-
-    row.innerHTML = `
-      <td>${escapeHtml(work.title)}</td>
-      <td>${work.price}</td>
-      <td>${work.isDiscounted ? '<span class="badge">할인</span>' : "-"}</td>
-      <td>${work.isDiscounted ? escapeHtml(formatDateOnly(work.discountEndDate)) : "-"}</td>
-      <td class="note-cell">${escapeHtml(work.note || "-")}</td>
-      <td></td>
-    `;
-
-    const actionCell = row.lastElementChild;
-    const editBtn = document.createElement("button");
-    editBtn.type = "button";
-    editBtn.className = "btn btn-small";
-    editBtn.textContent = "수정";
-    editBtn.addEventListener("click", () => {
-      setWorkForm(work);
-      elements.workId.value = work.id;
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    });
-
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.className = "btn btn-small btn-danger";
-    deleteBtn.textContent = "삭제";
-    deleteBtn.style.marginLeft = "8px";
-    deleteBtn.addEventListener("click", () => {
-      const linked = state.data.accounts.some((account) =>
-        account.purchases.some((purchase) => purchase.workId === work.id)
-      );
-      const message = linked
-        ? "이 작품은 일부 구매 계획과 연결되어 있습니다. 그래도 삭제할까요?"
-        : "이 작품을 삭제할까요?";
-      if (!window.confirm(message)) return;
-
-      state.data.works = state.data.works.filter((item) => item.id !== work.id);
-      state.data.accounts.forEach((account) => {
-        account.purchases.forEach((purchase) => {
-          if (purchase.workId === work.id) {
-            purchase.workId = "";
-          }
-        });
-        account.updatedAt = nowIso();
-      });
-      if (elements.workId.value === work.id) resetWorkForm();
-      updateAndRender();
-    });
-
-    actionCell.appendChild(editBtn);
-    actionCell.appendChild(deleteBtn);
-    tbody.appendChild(row);
-  });
-}
-
-function render() {
+function renderAll() {
   renderSummary();
+  renderWorkDatalist();
   renderAccounts();
   renderWorks();
 }
 
-function updateAccount(accountId, key, value) {
-  const account = state.data.accounts.find((item) => item.id === accountId);
-  if (!account) return;
-  account[key] = value;
-  account.updatedAt = nowIso();
-  updateAndRender();
+function renderSummary() {
+  const accountCount = state.accounts.length;
+  const totalCookies = state.accounts.reduce((sum, account) => sum + account.cookieTotal, 0);
+  const totalExpireSoon = state.accounts.reduce((sum, account) => {
+    return sum + account.expireToday + account.expireTomorrow + account.expireDayAfterTomorrow;
+  }, 0);
+  els.summaryAccounts.textContent = String(accountCount);
+  els.summaryCookies.textContent = String(totalCookies);
+  els.summaryExpireSoon.textContent = String(totalExpireSoon);
+  els.summaryWorks.textContent = String(state.works.length);
+}
+
+function renderAccounts() {
+  els.accountTableBody.innerHTML = "";
+  if (state.accounts.length === 0) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td class="empty-cell" colspan="11">계정을 추가해서 시작하세요.</td>`;
+    els.accountTableBody.appendChild(tr);
+    return;
+  }
+
+  state.accounts.forEach((account) => {
+    const tr = document.createElement("tr");
+    const expireSoon = account.expireToday + account.expireTomorrow + account.expireDayAfterTomorrow;
+    const planned = account.purchases.reduce((sum, purchase) => sum + purchase.cookieCost, 0);
+    const remain = account.cookieTotal - planned;
+
+    tr.innerHTML = `
+      <td><input type="text" data-action="update-account" data-id="${account.id}" data-key="name" value="${escapeHtmlAttr(account.name)}" /></td>
+      <td><input type="text" data-action="update-account" data-id="${account.id}" data-key="loginId" value="${escapeHtmlAttr(account.loginId)}" /></td>
+      <td><input type="number" min="0" step="1" data-action="update-account-number" data-id="${account.id}" data-key="cookieTotal" value="${account.cookieTotal}" /></td>
+      <td><input type="number" min="0" step="1" data-action="update-account-number" data-id="${account.id}" data-key="expireToday" value="${account.expireToday}" /></td>
+      <td><input type="number" min="0" step="1" data-action="update-account-number" data-id="${account.id}" data-key="expireTomorrow" value="${account.expireTomorrow}" /></td>
+      <td><input type="number" min="0" step="1" data-action="update-account-number" data-id="${account.id}" data-key="expireDayAfterTomorrow" value="${account.expireDayAfterTomorrow}" /></td>
+      <td class="numeric-cell">${expireSoon}</td>
+      <td class="numeric-cell">${planned}</td>
+      <td class="numeric-cell ${remain < 0 ? "negative" : ""}">${remain}</td>
+      <td><input type="text" data-action="update-account" data-id="${account.id}" data-key="note" value="${escapeHtmlAttr(account.note)}" /></td>
+      <td>
+        <div class="account-actions">
+          <button type="button" class="btn btn-small" data-action="toggle-detail" data-id="${account.id}">${account.expanded ? "접기" : "상세"}</button>
+          <button type="button" class="btn btn-small btn-danger" data-action="delete-account" data-id="${account.id}">삭제</button>
+        </div>
+      </td>
+    `;
+    els.accountTableBody.appendChild(tr);
+
+    if (account.expanded) {
+      const detailTr = document.createElement("tr");
+      detailTr.className = "account-detail-row";
+      const detailTd = document.createElement("td");
+      detailTd.colSpan = 11;
+      detailTd.appendChild(buildPurchaseDetail(account, planned));
+      detailTr.appendChild(detailTd);
+      els.accountTableBody.appendChild(detailTr);
+    }
+  });
+
+  bindAccountTableEvents();
+}
+
+function buildPurchaseDetail(account, planned) {
+  const wrap = document.createElement("div");
+  wrap.className = "purchase-box";
+
+  const toolbar = document.createElement("div");
+  toolbar.className = "purchase-toolbar";
+  toolbar.innerHTML = `
+    <div class="purchase-summary">오늘 구매 작품 ${account.purchases.length}건 · 합계 ${planned} 쿠키</div>
+    <button type="button" class="btn btn-small" data-action="add-purchase" data-id="${account.id}">작품 추가</button>
+  `;
+  wrap.appendChild(toolbar);
+
+  const table = document.createElement("table");
+  table.className = "purchase-table";
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>작품명</th>
+        <th style="width: 140px;">쿠키 수량</th>
+        <th style="width: 90px;">삭제</th>
+      </tr>
+    </thead>
+  `;
+  const tbody = document.createElement("tbody");
+
+  if (account.purchases.length === 0) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td colspan="3" class="empty-cell">구매할 작품을 추가하세요.</td>`;
+    tbody.appendChild(tr);
+  } else {
+    account.purchases.forEach((purchase) => {
+      const tr = els.purchaseRowTemplate.content.firstElementChild.cloneNode(true);
+      const titleInput = tr.querySelector(".purchase-title-input");
+      const costInput = tr.querySelector(".purchase-cost-input");
+      const deleteButton = tr.querySelector(".btn-delete-purchase");
+
+      titleInput.value = purchase.title;
+      titleInput.dataset.action = "purchase-title";
+      titleInput.dataset.accountId = account.id;
+      titleInput.dataset.purchaseId = purchase.id;
+
+      costInput.value = purchase.cookieCost;
+      costInput.dataset.action = "purchase-cost";
+      costInput.dataset.accountId = account.id;
+      costInput.dataset.purchaseId = purchase.id;
+
+      deleteButton.dataset.action = "delete-purchase";
+      deleteButton.dataset.accountId = account.id;
+      deleteButton.dataset.purchaseId = purchase.id;
+
+      tbody.appendChild(tr);
+    });
+  }
+
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+  return wrap;
+}
+
+function bindAccountTableEvents() {
+  els.accountTableBody.querySelectorAll("[data-action='update-account']").forEach((input) => {
+    input.addEventListener("input", (event) => {
+      const account = findAccount(event.target.dataset.id);
+      if (!account) return;
+      account[event.target.dataset.key] = event.target.value;
+      account.updatedAt = nowIso();
+      saveState();
+    });
+  });
+
+  els.accountTableBody.querySelectorAll("[data-action='update-account-number']").forEach((input) => {
+    input.addEventListener("input", (event) => {
+      const account = findAccount(event.target.dataset.id);
+      if (!account) return;
+      account[event.target.dataset.key] = toNonNegativeInt(event.target.value);
+      account.updatedAt = nowIso();
+      renderAccounts();
+      renderSummary();
+      saveState();
+    });
+  });
+
+  els.accountTableBody.querySelectorAll("[data-action='toggle-detail']").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const account = findAccount(event.target.dataset.id);
+      if (!account) return;
+      account.expanded = !account.expanded;
+      renderAccounts();
+      saveState();
+    });
+  });
+
+  els.accountTableBody.querySelectorAll("[data-action='delete-account']").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const accountId = event.target.dataset.id;
+      if (!confirm("이 계정을 삭제할까요?")) return;
+      state.accounts = state.accounts.filter((account) => account.id !== accountId);
+      commit();
+    });
+  });
+
+  els.accountTableBody.querySelectorAll("[data-action='add-purchase']").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const account = findAccount(event.target.dataset.id);
+      if (!account) return;
+      account.purchases.push(createPurchase());
+      account.updatedAt = nowIso();
+      commit();
+    });
+  });
+
+  els.accountTableBody.querySelectorAll("[data-action='delete-purchase']").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const account = findAccount(event.target.dataset.accountId);
+      if (!account) return;
+      account.purchases = account.purchases.filter((purchase) => purchase.id !== event.target.dataset.purchaseId);
+      account.updatedAt = nowIso();
+      commit();
+    });
+  });
+
+  els.accountTableBody.querySelectorAll("[data-action='purchase-title']").forEach((input) => {
+    input.addEventListener("input", (event) => {
+      const account = findAccount(event.target.dataset.accountId);
+      if (!account) return;
+      const purchase = account.purchases.find((item) => item.id === event.target.dataset.purchaseId);
+      if (!purchase) return;
+
+      const title = event.target.value;
+      const matched = state.works.find((work) => work.title === title);
+      purchase.title = title;
+      purchase.workId = matched ? matched.id : "";
+      if (matched) purchase.cookieCost = matched.price;
+      account.updatedAt = nowIso();
+      renderAccounts();
+      renderSummary();
+      saveState();
+    });
+  });
+
+  els.accountTableBody.querySelectorAll("[data-action='purchase-cost']").forEach((input) => {
+    input.addEventListener("input", (event) => {
+      const account = findAccount(event.target.dataset.accountId);
+      if (!account) return;
+      const purchase = account.purchases.find((item) => item.id === event.target.dataset.purchaseId);
+      if (!purchase) return;
+      purchase.cookieCost = toNonNegativeInt(event.target.value);
+      account.updatedAt = nowIso();
+      renderAccounts();
+      renderSummary();
+      saveState();
+    });
+  });
+}
+
+function renderWorkDatalist() {
+  els.workListData.innerHTML = "";
+  const sorted = [...state.works].sort((a, b) => a.title.localeCompare(b.title, "ko"));
+  sorted.forEach((work) => {
+    const option = document.createElement("option");
+    option.value = work.title;
+    els.workListData.appendChild(option);
+  });
+}
+
+function toggleWorkSort(key) {
+  if (state.workSort.key === key) {
+    state.workSort.direction = state.workSort.direction === "asc" ? "desc" : "asc";
+  } else {
+    state.workSort.key = key;
+    state.workSort.direction = "asc";
+  }
+  renderWorks();
+  saveState();
+}
+
+function renderWorks() {
+  els.workTableBody.innerHTML = "";
+  const works = getFilteredSortedWorks();
+
+  if (works.length === 0) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td class="empty-cell" colspan="6">등록된 작품이 없습니다.</td>`;
+    els.workTableBody.appendChild(tr);
+    return;
+  }
+
+  works.forEach((work) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(work.title)}</td>
+      <td class="numeric-cell">${work.price}</td>
+      <td>${work.isDiscounted ? '<span class="badge badge-discount">할인</span>' : '<span class="badge badge-normal">일반</span>'}</td>
+      <td>${work.discountEndDate ? formatDate(work.discountEndDate) : "-"}</td>
+      <td>${escapeHtml(work.note || "-")}</td>
+      <td>
+        <div class="account-actions">
+          <button type="button" class="btn btn-small" data-action="edit-work" data-id="${work.id}">수정</button>
+          <button type="button" class="btn btn-small btn-danger" data-action="delete-work" data-id="${work.id}">삭제</button>
+        </div>
+      </td>
+    `;
+    els.workTableBody.appendChild(tr);
+  });
+
+  bindWorkTableEvents();
+}
+
+function getFilteredSortedWorks() {
+  const filtered = state.works.filter((work) => {
+    if (!state.workSearch) return true;
+    const value = `${work.title} ${work.note} ${work.price}`.toLowerCase();
+    return value.includes(state.workSearch);
+  });
+
+  return filtered.sort((a, b) => {
+    const direction = state.workSort.direction === "asc" ? 1 : -1;
+    if (state.workSort.key === "price") {
+      const diff = a.price - b.price;
+      if (diff !== 0) return diff * direction;
+      return a.title.localeCompare(b.title, "ko") * direction;
+    }
+    const diff = a.title.localeCompare(b.title, "ko");
+    if (diff !== 0) return diff * direction;
+    return (a.price - b.price) * direction;
+  });
+}
+
+function bindWorkTableEvents() {
+  els.workTableBody.querySelectorAll("[data-action='edit-work']").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const work = state.works.find((item) => item.id === event.target.dataset.id);
+      if (!work) return;
+      els.workId.value = work.id;
+      els.workTitle.value = work.title;
+      els.workPrice.value = String(work.price);
+      els.workDiscount.checked = work.isDiscounted;
+      els.workDiscountEnd.value = work.discountEndDate;
+      els.workNote.value = work.note;
+      els.workTitle.focus();
+    });
+  });
+
+  els.workTableBody.querySelectorAll("[data-action='delete-work']").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const workId = event.target.dataset.id;
+      const isUsed = state.accounts.some((account) => account.purchases.some((purchase) => purchase.workId === workId));
+      const message = isUsed ? "이 작품은 구매 목록에 연결되어 있습니다. 그래도 삭제할까요?" : "이 작품을 삭제할까요?";
+      if (!confirm(message)) return;
+
+      const target = state.works.find((work) => work.id === workId);
+      state.works = state.works.filter((work) => work.id !== workId);
+
+      state.accounts.forEach((account) => {
+        account.purchases.forEach((purchase) => {
+          if (purchase.workId === workId) {
+            purchase.workId = "";
+          }
+          if (target && purchase.title === target.title && !purchase.workId) {
+            purchase.title = purchase.title;
+          }
+        });
+      });
+
+      if (els.workId.value === workId) resetWorkForm();
+      commit();
+    });
+  });
+}
+
+function saveWorkForm() {
+  const id = els.workId.value.trim();
+  const title = els.workTitle.value.trim();
+  if (!title) {
+    alert("작품명은 필수입니다.");
+    return;
+  }
+
+  const payload = {
+    title,
+    price: toNonNegativeInt(els.workPrice.value),
+    isDiscounted: els.workDiscount.checked,
+    discountEndDate: els.workDiscountEnd.value,
+    note: els.workNote.value.trim(),
+    updatedAt: nowIso()
+  };
+
+  if (id) {
+    const work = state.works.find((item) => item.id === id);
+    if (!work) return;
+    const oldTitle = work.title;
+    Object.assign(work, payload);
+
+    state.accounts.forEach((account) => {
+      account.purchases.forEach((purchase) => {
+        if (purchase.workId === work.id || purchase.title === oldTitle) {
+          purchase.workId = work.id;
+          purchase.title = work.title;
+          purchase.cookieCost = work.price;
+        }
+      });
+    });
+  } else {
+    state.works.push({
+      id: uid(),
+      createdAt: nowIso(),
+      ...payload
+    });
+  }
+
+  resetWorkForm();
+  commit();
+}
+
+function resetWorkForm() {
+  els.workId.value = "";
+  els.workTitle.value = "";
+  els.workPrice.value = "0";
+  els.workDiscount.checked = false;
+  els.workDiscountEnd.value = "";
+  els.workNote.value = "";
+}
+
+function backupJson() {
+  const blob = new Blob([JSON.stringify({
+    accounts: state.accounts,
+    works: state.works,
+    workSort: state.workSort
+  }, null, 2)], { type: "application/json" });
+
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
+  anchor.href = url;
+  anchor.download = `naver-series-manager-${stamp}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function findAccount(id) {
+  return state.accounts.find((account) => account.id === id);
+}
+
+function formatDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(date);
 }
 
 function escapeHtml(value) {
@@ -515,141 +648,13 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
-function exportData() {
-  const blob = new Blob([JSON.stringify(state.data, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
-  anchor.href = url;
-  anchor.download = `naver-series-manager-backup-${stamp}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+function escapeHtmlAttr(value) {
+  return escapeHtml(value);
 }
 
-async function importData(file) {
-  try {
-    const text = await file.text();
-    const parsed = JSON.parse(text);
-    state.data = {
-      accounts: Array.isArray(parsed?.accounts) ? parsed.accounts.map(normalizeAccount) : [],
-      works: Array.isArray(parsed?.works) ? parsed.works.map(normalizeWork) : [],
-    };
-    updateAndRender();
-    window.alert("불러오기를 완료했습니다.");
-  } catch {
-    window.alert("JSON 파일을 불러오지 못했습니다.");
-  }
-}
-
-function bindEvents() {
-  elements.addAccountBtn.addEventListener("click", () => {
-    state.data.accounts.push(createEmptyAccount());
-    updateAndRender();
-  });
-
-  elements.exportBtn.addEventListener("click", exportData);
-
-  elements.importBtn.addEventListener("click", () => {
-    elements.importFileInput.click();
-  });
-
-  elements.importFileInput.addEventListener("change", async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    await importData(file);
-    event.target.value = "";
-  });
-
-  elements.resetBtn.addEventListener("click", () => {
-    if (!window.confirm("모든 계정과 작품 데이터를 삭제할까요?")) return;
-    state.data = defaultStateData();
-    resetWorkForm();
-    updateAndRender();
-  });
-
-  elements.workForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-
-    const id = elements.workId.value.trim();
-    const title = elements.workTitle.value.trim();
-    const price = toSafeNumber(elements.workPrice.value);
-    const isDiscounted = elements.workDiscounted.checked;
-    const discountEndDate = elements.workDiscountEndDate.value;
-    const note = elements.workNote.value.trim();
-
-    if (!title) {
-      window.alert("작품명은 필수입니다.");
-      return;
-    }
-
-    if (id) {
-      const target = state.data.works.find((work) => work.id === id);
-      if (!target) return;
-
-      target.title = title;
-      target.price = price;
-      target.isDiscounted = isDiscounted;
-      target.discountEndDate = discountEndDate;
-      target.note = note;
-      target.updatedAt = nowIso();
-
-      state.data.accounts.forEach((account) => {
-        account.purchases.forEach((purchase) => {
-          if (purchase.workId === target.id) {
-            purchase.titleSnapshot = target.title;
-          }
-        });
-        account.updatedAt = nowIso();
-      });
-    } else {
-      state.data.works.push({
-        id: createId(),
-        title,
-        price,
-        isDiscounted,
-        discountEndDate,
-        note,
-        createdAt: nowIso(),
-        updatedAt: nowIso(),
-      });
-    }
-
-    resetWorkForm();
-    updateAndRender();
-  });
-
-  elements.cancelWorkEditBtn.addEventListener("click", resetWorkForm);
-
-  elements.workSearchInput.addEventListener("input", (event) => {
-    state.searchTerm = event.target.value;
-    renderWorks();
-  });
-
-  elements.sortByTitleBtn.addEventListener("click", () => {
-    if (state.sort.key === "title") {
-      state.sort.direction = state.sort.direction === "asc" ? "desc" : "asc";
-    } else {
-      state.sort.key = "title";
-      state.sort.direction = "asc";
-    }
-    renderWorks();
-  });
-
-  elements.sortByPriceBtn.addEventListener("click", () => {
-    if (state.sort.key === "price") {
-      state.sort.direction = state.sort.direction === "asc" ? "desc" : "asc";
-    } else {
-      state.sort.key = "price";
-      state.sort.direction = "asc";
-    }
-    renderWorks();
-  });
-}
-
-function init() {
+document.addEventListener("DOMContentLoaded", () => {
+  initElements();
+  loadState();
   bindEvents();
-  resetWorkForm();
-  render();
-}
-
-init();
+  renderAll();
+});
